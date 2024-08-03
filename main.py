@@ -1,8 +1,4 @@
 import os
-#
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-#
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import HTMLResponse
 import uvicorn
@@ -12,7 +8,7 @@ from faster_whisper import WhisperModel
 app = FastAPI()
 
 # Initialize the model (make sure you have the model files)
-model = WhisperModel('base',device="cpu",compute_type="int8")
+model = WhisperModel("tiny",device="cpu",compute_type="int8")
 
 # Directory to store recordings
 recordings_dir = 'recordings'
