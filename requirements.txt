@@ -1,2 +1,6 @@
 fastapi
 uvicorn
+azure-storage-blob
+azure-identity
+azure-keyvault-secrets
+faster-whisper
