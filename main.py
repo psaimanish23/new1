@@ -16,7 +16,7 @@ app = FastAPI()
 model = WhisperModel('base', device="cpu", compute_type="int8")
 
 # Azure Blob Storage configuration
-connect_str = "DefaultEndpointsProtocol=https;AccountName=manishdemostorage;AccountKey="
+connect_str = "DefaultEndpointsProtocol=https;AccountName=manishdemostorage;AccountKey=${{ secrets.CONNECT_STR }}"
 container_name = "demo-container"
 
 blob_service_client = BlobServiceClient.from_connection_string(connect_str)
