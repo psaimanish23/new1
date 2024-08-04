@@ -1,29 +1,39 @@
-#
 import os
+#
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 #
+
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import HTMLResponse
 import uvicorn
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from faster_whisper import WhisperModel
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+from io import BytesIO
 
 app = FastAPI()
 
 # Initialize the model (make sure you have the model files)
 model = WhisperModel('base', device="cpu", compute_type="int8")
 
+# Azure Key Vault configuration
+key_vault_url = "https://storagekvd.vault.azure.net/"
+secret_name = "connectStr"
+
+# Retrieve the secret from Azure Key Vault
+credential = DefaultAzureCredential()
+secret_client = SecretClient(vault_url=key_vault_url, credential=credential)
+retrieved_secret = secret_client.get_secret(secret_name)
+connect_str = retrieved_secret.value
+
 # Azure Blob Storage configuration
-connect_str = "DefaultEndpointsProtocol=https;AccountName=manishdemostorage;AccountKey=${{ secrets.CONNECT_STR }}"
 container_name = "demo-container"
 
 blob_service_client = BlobServiceClient.from_connection_string(connect_str)
 container_client = blob_service_client.get_container_client(container_name)
-
-# Directory to store temporary recordings
-recordings_dir = os.path.join(os.getcwd(), 'recordings')
 
 @app.get("/")
 def main():
@@ -86,33 +96,23 @@ async def upload_file(file: UploadFile = File(...)):
     if not container_client.exists():
         container_client.create_container()
 
-    # Ensure the recordings directory exists
-    if not os.path.exists(recordings_dir):
-        os.makedirs(recordings_dir)
+    # Read the uploaded file in-memory
+    file_data = await file.read()
 
-    # Save the uploaded file locally
-    file_location = os.path.join(recordings_dir, file.filename)
-    with open(file_location, "wb") as f:
-        f.write(await file.read())
-
-    # Upload the file to Azure Blob Storage
+    # Upload the file directly to Azure Blob Storage
     blob_client = container_client.get_blob_client(file.filename)
-    with open(file_location, "rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
+    blob_client.upload_blob(file_data, overwrite=True)
 
-    # Process the audio file (download it first)
-    download_file_path = os.path.join(recordings_dir, file.filename)
-    with open(download_file_path, "wb") as download_file:
-        download_file.write(blob_client.download_blob().readall())
+    # Download the file from Azure Blob Storage to process it
+    download_stream = blob_client.download_blob()
+    audio_data = download_stream.readall()
 
-    # Process the audio file
-    segments, info = model.transcribe(download_file_path)
+    # Process the audio file using BytesIO
+    audio_file = BytesIO(audio_data)
+    segments, info = model.transcribe(audio_file)
     transcription = ''.join([segment.text for segment in segments])
 
-    # Delete the local temporary file
-    os.remove(download_file_path)
+    # Delete the blob from Azure Blob Storage
+    blob_client.delete_blob()
 
     return {"transcription": transcription}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
