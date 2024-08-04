@@ -4,3 +4,4 @@ azure-storage-blob
 azure-identity
 azure-keyvault-secrets
 faster-whisper
+python-multipart
